@@ -10,18 +10,19 @@ const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  if (req.method === 'GET' && req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('sd-proxy ok');
+    return;
+  }
+
   if (req.method !== 'POST' || req.url !== '/analizza') {
     res.writeHead(404); res.end('Not found'); return;
   }
 
   let body = '';
-  req.on('data', chunk => {
-    body += chunk;
-    if (body.length > 20 * 1024 * 1024) { // 20MB max
-      res.writeHead(413); res.end('Too large'); return;
-    }
-  });
-
+  req.on('data', chunk => { body += chunk; });
   req.on('end', () => {
     let payload;
     try { payload = JSON.parse(body); } catch {
@@ -71,4 +72,4 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => console.log(`Proxy attivo su porta ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`Proxy attivo su porta ${PORT}`));
