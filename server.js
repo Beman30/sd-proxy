@@ -7,23 +7,24 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', '*');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  if (req.method === 'GET' && req.url === '/') {
+  if (req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('sd-proxy ok');
     return;
   }
 
-  if (req.method !== 'POST' || req.url !== '/analizza') {
+  if (req.method !== 'POST') {
     res.writeHead(404); res.end('Not found'); return;
   }
 
-  let body = '';
-  req.on('data', chunk => { body += chunk; });
+  let chunks = [];
+  req.on('data', chunk => chunks.push(chunk));
   req.on('end', () => {
+    const body = Buffer.concat(chunks).toString();
     let payload;
     try { payload = JSON.parse(body); } catch {
       res.writeHead(400); res.end('Bad JSON'); return;
@@ -44,8 +45,7 @@ const server = http.createServer((req, res) => {
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
         'Content-Length': Buffer.byteLength(data)
-      },
-      timeout: 60000
+      }
     };
 
     const apiReq = https.request(options, apiRes => {
@@ -58,13 +58,7 @@ const server = http.createServer((req, res) => {
     });
 
     apiReq.on('error', err => {
-      console.error('API error:', err.message);
       res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
-    });
-
-    apiReq.on('timeout', () => {
-      apiReq.destroy();
-      res.writeHead(504); res.end(JSON.stringify({ error: 'timeout' }));
     });
 
     apiReq.write(data);
@@ -72,4 +66,4 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`Proxy attivo su porta ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`Proxy su porta ${PORT}`));
