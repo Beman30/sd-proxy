@@ -5,7 +5,6 @@ const PORT = process.env.PORT || 3000;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
 
 const server = http.createServer((req, res) => {
-  // CORS — permetti chiamate da healthysmile.it e localhost
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -16,7 +15,13 @@ const server = http.createServer((req, res) => {
   }
 
   let body = '';
-  req.on('data', chunk => body += chunk);
+  req.on('data', chunk => {
+    body += chunk;
+    if (body.length > 20 * 1024 * 1024) { // 20MB max
+      res.writeHead(413); res.end('Too large'); return;
+    }
+  });
+
   req.on('end', () => {
     let payload;
     try { payload = JSON.parse(body); } catch {
@@ -38,7 +43,8 @@ const server = http.createServer((req, res) => {
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
         'Content-Length': Buffer.byteLength(data)
-      }
+      },
+      timeout: 60000
     };
 
     const apiReq = https.request(options, apiRes => {
@@ -51,7 +57,13 @@ const server = http.createServer((req, res) => {
     });
 
     apiReq.on('error', err => {
+      console.error('API error:', err.message);
       res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    });
+
+    apiReq.on('timeout', () => {
+      apiReq.destroy();
+      res.writeHead(504); res.end(JSON.stringify({ error: 'timeout' }));
     });
 
     apiReq.write(data);
